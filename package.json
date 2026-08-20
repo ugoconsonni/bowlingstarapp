@@ -36,7 +36,7 @@
     "win": {
       "target": [
         {
-          "target": "squirrel",
+          "target": "nsis",
           "arch": [
             "x64"
           ]

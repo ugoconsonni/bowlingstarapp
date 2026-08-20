@@ -20,8 +20,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Windows Squirrel installer
-        timeout-minutes: 20
+      - name: Build Windows NSIS installer
+        timeout-minutes: 15
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder build --win --x64 --publish never
@@ -78,8 +78,8 @@ jobs:
           done < <(find dist -type f \( \
             -name "*.nupkg" -o \
             -name "RELEASES" -o \
-            -name "*.Setup.exe" -o \
-            -name "*Setup*.exe" -o \
+            -name "*.exe" -o \
+            -name "*.blockmap" -o \
             -name "latest.yml" \
           \))
           if [ ${#ASSETS[@]} -eq 0 ]; then
