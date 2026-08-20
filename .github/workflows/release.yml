@@ -76,10 +76,8 @@ jobs:
           while IFS= read -r f; do
             ASSETS+=("$f")
           done < <(find dist -type f \( \
-            -name "*.nupkg" -o \
-            -name "RELEASES" -o \
-            -name "*.exe" -o \
-            -name "*.blockmap" -o \
+            -name "*Setup*.exe" -o \
+            -name "*Setup*.exe.blockmap" -o \
             -name "latest.yml" \
           \))
           if [ ${#ASSETS[@]} -eq 0 ]; then
