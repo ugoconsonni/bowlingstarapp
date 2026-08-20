@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Build Windows NSIS installer
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npx electron-builder build --win --x64 --publish never

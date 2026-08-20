@@ -33,6 +33,7 @@
   },
   "build": {
     "appId": "com.bowlingstar.app",
+    "npmRebuild": false,
     "win": {
       "target": [
         {
