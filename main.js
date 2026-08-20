@@ -40,12 +40,18 @@ function restartApp() {
 	const doRelaunch = () => {
 		if (done) return
 		done = true
+		// Sans ça, la nouvelle instance voit le verrou encore pris et s'arrête tout de suite.
+		if (typeof app.releaseSingleInstanceLock === 'function') {
+			app.releaseSingleInstanceLock()
+		}
 		app.relaunch()
-		app.exit()
+		app.exit(0)
 	}
 	if (localServer) {
-		localServer.close(() => doRelaunch())
-		setTimeout(doRelaunch, 1000)
+		const server = localServer
+		localServer = null
+		server.close(() => doRelaunch())
+		setTimeout(doRelaunch, 800)
 	} else {
 		doRelaunch()
 	}
@@ -61,7 +67,96 @@ function listenLocalServer(server) {
 		}
 		console.error(err)
 	})
-	server.listen(3333)
+	// 0.0.0.0 : le backoffice appelle l'IP LAN IPv4, pas seulement localhost / IPv6.
+	server.listen(3333, '0.0.0.0')
+}
+
+function startLocalHttpServer() {
+	if (localServer) return
+	var http = require("http");
+	const url = require("url");
+	var server = http.createServer(function (req, res) {
+		res.setHeader("Access-Control-Allow-Origin", "*")
+		res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		res.setHeader("Access-Control-Allow-Headers", "*")
+		if (req.method == "OPTIONS") {
+			res.writeHead(204)
+			res.end()
+			return
+		}
+		const parsed = url.parse(req.url, true)
+		const reqUrl = parsed.pathname
+		if (req.method == "GET") {
+			if (reqUrl == "/") {
+				res.write("BowlingApplication" + JSON.stringify(parsed.query))
+				res.end()
+				return
+			}
+			if (reqUrl == "/restart") {
+				res.write("restart ok")
+				res.end()
+				setTimeout(restartApp, 200)
+				return
+			}
+			if (reqUrl == "/openConsole") {
+				if (mainWindow) mainWindow.webContents.openDevTools()
+				res.write("open console ok")
+				res.end()
+				return
+			}
+			if (reqUrl == "/closeConsole") {
+				if (mainWindow) mainWindow.webContents.closeDevTools()
+				res.write("close console ok")
+				res.end()
+				return
+			}
+			if (reqUrl == "/clearCache") {
+				res.write("clear cache ok")
+				res.end()
+				if (mainWindow) {
+					const ses = mainWindow.webContents.session
+					ses.clearCache().then(function () {
+						console.log("vide")
+						restartApp()
+					})
+				} else {
+					setTimeout(restartApp, 200)
+				}
+				return
+			}
+			if (reqUrl == "/ip") {
+				res.write("ip:" + myip.getLocalIP4())
+				res.end()
+				return
+			}
+			if (reqUrl == "/nepting/start") {
+				shell.openPath('C:\\Nepting\\nepting.bat');
+				res.write("Neptin start ok")
+				res.end()
+				return
+			}
+			if (reqUrl == "/version") {
+				res.write("Version:" + app.getVersion())
+				res.end()
+				return
+			}
+			res.writeHead(404)
+			res.end("not found")
+			return
+		} else if (req.method == "POST") {
+			if (reqUrl == "/hello") {
+				res.write("hello world")
+				res.end()
+				return
+			}
+		}
+		res.writeHead(404)
+		res.end("not found")
+	});
+	localServer = server;
+	localServerRetries = 0;
+	listenLocalServer(server);
+	console.log("http://0.0.0.0:3333/");
 }
 function initWS(){
 	 ws = new WebSocket('ws://'+addressFinal+':3000');
@@ -161,75 +256,6 @@ if(addresse == ''){
 		mainWindow.webContents.setZoomFactor(zoom);
 		mainWindow.show();
 	});
-	
-	 mainWindow.webContents.once("did-finish-load", function () {
-        if (localServer) return
-        var http = require("http");
-        const url = require("url");
-        var server = http.createServer(function (req, res) {
-             // Set our header
-    res.setHeader("Access-Control-Allow-Origin", "*")
-    // Parse the request url
-    const parsed = url.parse(req.url, true)
-    // Get the path from the parsed URL
-    const reqUrl = parsed.pathname
-    // Compare our request method
-    if (req.method == "GET") {
-        if (reqUrl == "/") {
-            // Send a JSON version of our URL query
-            res.write("BowlingApplication" +  JSON.stringify(parsed.query))
-            res.end()
-        }
-		if(reqUrl=="/restart"){
-			res.write("restart ok")
-            res.end()
-			restartApp()
-		}
-		if(reqUrl=="/openConsole"){
-			mainWindow.webContents.openDevTools()
-			res.write("open console ok")
-            res.end()
-		}
-		if(reqUrl=="/closeConsole"){
-			mainWindow.webContents.closeDevTools()
-			res.write("close console ok")
-            res.end()
-		}
-		if(reqUrl=="/clearCache"){
-			const ses = mainWindow.webContents.session
-			  ses.clearCache().then(data=>{
-				  console.log("vide")
-				  restartApp()
-			  })
-			res.write("clear cache ok")
-            res.end()
-		}
-		if(reqUrl=="/ip"){
-			res.write("ip:"+myip.getLocalIP4())
-			res.end()
-		}
-		if(reqUrl=="/nepting/start"){
-			shell.openPath('C:\\Nepting\\nepting.bat');
-			res.write("Neptin start ok")
-            res.end()
-		}
-		if(reqUrl=="/version"){
-			res.write("Version:"+app.getVersion())
-            res.end()
-		}
-    } else if (req.method == "POST") {
-        if (reqUrl == "/hello") {
-            res.write("hello world")
-            res.end()
-        }
-	
-	}
-        });
-        localServer = server;
-        localServerRetries = 0;
-        listenLocalServer(server);
-        console.log("http://localhost:3333/");
-    });
   //mainWindow.maximize();
    
   // Open the DevTools.
@@ -246,6 +272,7 @@ app.whenReady().then(() => {
 			//console.log('Electron loves global shortcuts!')
 			mainWindow.webContents.openDevTools()
 		  })
+		startLocalHttpServer()
 		createWindow()
 		
 		// Upper Limit is working of 500 % 

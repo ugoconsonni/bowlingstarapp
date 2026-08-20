@@ -87,6 +87,6 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             --title "v${VERSION}" \
-            --notes "Fix: plus de crash EADDRINUSE si l'application est lancée deux fois." \
+            --notes "Fix: /restart depuis le backoffice relance bien la piste." \
             --latest \
             "${ASSETS[@]}"
