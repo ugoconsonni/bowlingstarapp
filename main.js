@@ -11,6 +11,58 @@ let addressFinal=''
 let myAddress=''
 let mainWindow;
 let ws;
+let localServer;
+let localServerRetries = 0;
+
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+	app.exit(0)
+} else {
+	app.on('second-instance', () => {
+		if (mainWindow) {
+			if (mainWindow.isMinimized()) mainWindow.restore()
+			mainWindow.show()
+			mainWindow.focus()
+		}
+	})
+}
+
+process.on('uncaughtException', (err) => {
+	if (err && err.code === 'EADDRINUSE') {
+		console.error('Port 3333 already in use, ignored')
+		return
+	}
+	console.error(err)
+})
+
+function restartApp() {
+	let done = false
+	const doRelaunch = () => {
+		if (done) return
+		done = true
+		app.relaunch()
+		app.exit()
+	}
+	if (localServer) {
+		localServer.close(() => doRelaunch())
+		setTimeout(doRelaunch, 1000)
+	} else {
+		doRelaunch()
+	}
+}
+
+function listenLocalServer(server) {
+	server.once('error', (err) => {
+		if (err.code === 'EADDRINUSE' && localServerRetries < 10) {
+			localServerRetries++
+			console.log('Port 3333 already in use, retry ' + localServerRetries)
+			setTimeout(() => listenLocalServer(server), 300)
+			return
+		}
+		console.error(err)
+	})
+	server.listen(3333)
+}
 function initWS(){
 	 ws = new WebSocket('ws://'+addressFinal+':3000');
 
@@ -32,8 +84,7 @@ ws.on('message', function incoming(data) {
 	console.log(data)
 	let obj = JSON.parse(data);
 	if(obj.action=='reloadApp' && obj.data.ip == myAddress){
-		app.relaunch()
-		app.exit()
+		restartApp()
 	}
 	if(obj.action =='openConsole' && obj.data.ip == myAddress){
 	  mainWindow.webContents.openDevTools()
@@ -45,8 +96,7 @@ ws.on('message', function incoming(data) {
 	  const ses = mainWindow.webContents.session
 			  ses.clearCache().then(data=>{
 				  console.log("vide")
-				  app.relaunch()
-				  app.exit()
+				  restartApp()
 			  })
 	}
 
@@ -113,6 +163,7 @@ if(addresse == ''){
 	});
 	
 	 mainWindow.webContents.once("did-finish-load", function () {
+        if (localServer) return
         var http = require("http");
         const url = require("url");
         var server = http.createServer(function (req, res) {
@@ -130,10 +181,9 @@ if(addresse == ''){
             res.end()
         }
 		if(reqUrl=="/restart"){
-			app.relaunch()
-			app.exit()
 			res.write("restart ok")
             res.end()
+			restartApp()
 		}
 		if(reqUrl=="/openConsole"){
 			mainWindow.webContents.openDevTools()
@@ -149,8 +199,7 @@ if(addresse == ''){
 			const ses = mainWindow.webContents.session
 			  ses.clearCache().then(data=>{
 				  console.log("vide")
-				  app.relaunch()
-				  app.exit()
+				  restartApp()
 			  })
 			res.write("clear cache ok")
             res.end()
@@ -176,7 +225,9 @@ if(addresse == ''){
 	
 	}
         });
-        server.listen(3333);
+        localServer = server;
+        localServerRetries = 0;
+        listenLocalServer(server);
         console.log("http://localhost:3333/");
     });
   //mainWindow.maximize();
@@ -189,6 +240,7 @@ if(addresse == ''){
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+	if (!gotTheLock) return
 	try{
 		globalShortcut.register('shift+CommandOrControl+I', () => {
 			//console.log('Electron loves global shortcuts!')
@@ -207,8 +259,7 @@ app.whenReady().then(() => {
 		  })
 	} catch (error) {
 		console.error(error);
-		app.relaunch()
-		app.exit()
+		restartApp()
 	  // expected output: ReferenceError: nonExistentFunction is not defined
 	  // Note - error messages will vary depending on browser
 	}
@@ -218,6 +269,12 @@ app.whenReady().then(() => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+app.on('before-quit', function () {
+	if (localServer) {
+		localServer.close()
+		localServer = null
+	}
+})
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit()
 })

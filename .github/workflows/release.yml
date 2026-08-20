@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 16
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows Squirrel installer
+        run: npx electron-builder build --win --x64 --publish never
+
+      - name: Ensure latest.yml for electron-updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          EXE=$(find dist -name "*${VERSION}.Setup.exe" -o -name "*Setup ${VERSION}.exe" | head -n 1)
+          if [ -z "$EXE" ]; then
+            EXE=$(find dist -name "*.Setup.exe" -o -name "*Setup*.exe" | head -n 1)
+          fi
+          if [ -z "$EXE" ]; then
+            echo "No Setup.exe found"
+            find dist -type f
+            exit 1
+          fi
+          node -e '
+            const fs = require("fs");
+            const crypto = require("crypto");
+            const path = require("path");
+            const exe = process.argv[1];
+            const version = process.argv[2];
+            const data = fs.readFileSync(exe);
+            const sha512 = crypto.createHash("sha512").update(data).digest("base64");
+            const name = path.basename(exe);
+            const yml = [
+              "version: " + version,
+              "files:",
+              "  - url: " + name,
+              "    sha512: " + sha512,
+              "    size: " + data.length,
+              "path: " + name,
+              "sha512: " + sha512,
+              "releaseDate: \"" + new Date().toISOString() + "\"",
+              ""
+            ].join("\n");
+            const out = path.join(path.dirname(exe), "latest.yml");
+            fs.writeFileSync(out, yml);
+            console.log("wrote", out, "for", name);
+          ' "$EXE" "$VERSION"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          ASSETS=()
+          while IFS= read -r f; do
+            ASSETS+=("$f")
+          done < <(find dist -type f \( \
+            -name "*.nupkg" -o \
+            -name "RELEASES" -o \
+            -name "*.Setup.exe" -o \
+            -name "*Setup*.exe" -o \
+            -name "latest.yml" \
+          \))
+          if [ ${#ASSETS[@]} -eq 0 ]; then
+            echo "No release assets in dist"
+            find dist -type f
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --title "v${VERSION}" \
+            --notes "Fix: plus de crash EADDRINUSE si l'application est lancée deux fois." \
+            --latest \
+            "${ASSETS[@]}"

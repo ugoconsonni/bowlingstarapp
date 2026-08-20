@@ -1,6 +1,6 @@
 {
   "name": "bowlingStarLauncher",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "description": "Application generique piste/borne/billard",
   "main": "main.js",
   "scripts": {
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "electron-builder": "^22.14.13",
+    "electron-builder-squirrel-windows": "22.14.13",
     "electron-updater": "^5.3.0",
     "quick-local-ip": "^1.0.7",
     "websocket": "^1.0.33",
@@ -31,6 +32,20 @@
     "wsobserver": "^1.1.1"
   },
   "build": {
-    "appId": "com.bowlingstar.app"
+    "appId": "com.bowlingstar.app",
+    "win": {
+      "target": [
+        {
+          "target": "squirrel",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    }
   }
 }
