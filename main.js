@@ -1,5 +1,5 @@
 // Modules to control application life and create native browser window
-const {app, BrowserWindow, webFrame,globalShortcut, shell } = require('electron')
+const {app, BrowserWindow, webFrame,globalShortcut, shell, dialog } = require('electron')
 const path = require('path')
 const os = require('os');
 const WebSocket = require('ws');
@@ -274,6 +274,14 @@ app.whenReady().then(() => {
 		globalShortcut.register('shift+CommandOrControl+I', () => {
 			//console.log('Electron loves global shortcuts!')
 			mainWindow.webContents.openDevTools()
+		  })
+		globalShortcut.register('shift+CommandOrControl+V', () => {
+			dialog.showMessageBox(mainWindow || undefined, {
+				type: 'info',
+				title: 'BowlingStar',
+				message: 'Version ' + app.getVersion(),
+				buttons: ['OK']
+			})
 		  })
 		startLocalHttpServer()
 		createWindow()

@@ -87,6 +87,6 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             --title "v${VERSION}" \
-            --notes "L'application se relance automatiquement au démarrage du PC." \
+            --notes "Ctrl+Shift+V affiche la version installée." \
             --latest \
             "${ASSETS[@]}"
