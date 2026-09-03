@@ -268,6 +268,9 @@ if(addresse == ''){
 app.whenReady().then(() => {
 	if (!gotTheLock) return
 	try{
+		if (app.isPackaged) {
+			app.setLoginItemSettings({ openAtLogin: true })
+		}
 		globalShortcut.register('shift+CommandOrControl+I', () => {
 			//console.log('Electron loves global shortcuts!')
 			mainWindow.webContents.openDevTools()

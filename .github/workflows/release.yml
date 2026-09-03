@@ -87,6 +87,6 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             --title "v${VERSION}" \
-            --notes "Fix: /restart depuis le backoffice relance bien la piste." \
+            --notes "L'application se relance automatiquement au démarrage du PC." \
             --latest \
             "${ASSETS[@]}"
