@@ -1,6 +1,6 @@
 {
   "name": "bowlingStarLauncher",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Application generique piste/borne/billard",
   "main": "main.js",
   "scripts": {

@@ -13,6 +13,48 @@ let mainWindow;
 let ws;
 let localServer;
 let localServerRetries = 0;
+let kioskLock = true
+let allowQuit = false
+let bringFrontTimer = null
+
+function bringAppToFront() {
+	if (!mainWindow || mainWindow.isDestroyed() || !kioskLock) return
+	if (mainWindow.isMinimized()) mainWindow.restore()
+	mainWindow.setFullScreen(true)
+	mainWindow.setAlwaysOnTop(true, 'screen-saver')
+	mainWindow.show()
+	mainWindow.focus()
+	if (typeof mainWindow.moveTop === 'function') mainWindow.moveTop()
+}
+
+function applyKioskLock() {
+	if (!mainWindow || mainWindow.isDestroyed()) return
+	mainWindow.setMinimizable(!kioskLock)
+	if (typeof mainWindow.setClosable === 'function') {
+		mainWindow.setClosable(!kioskLock)
+	}
+	if (kioskLock) {
+		mainWindow.setFullScreen(true)
+		mainWindow.setAlwaysOnTop(true, 'screen-saver')
+	} else {
+		mainWindow.setAlwaysOnTop(false)
+	}
+}
+
+function setKioskLock(enabled) {
+	kioskLock = !!enabled
+	applyKioskLock()
+	if (kioskLock) bringAppToFront()
+}
+
+function unlockForQuit() {
+	allowQuit = true
+	kioskLock = false
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.setAlwaysOnTop(false)
+		if (typeof mainWindow.setClosable === 'function') mainWindow.setClosable(true)
+	}
+}
 
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
@@ -20,9 +62,12 @@ if (!gotTheLock) {
 } else {
 	app.on('second-instance', () => {
 		if (mainWindow) {
-			if (mainWindow.isMinimized()) mainWindow.restore()
-			mainWindow.show()
-			mainWindow.focus()
+			if (kioskLock) bringAppToFront()
+			else {
+				if (mainWindow.isMinimized()) mainWindow.restore()
+				mainWindow.show()
+				mainWindow.focus()
+			}
 		}
 	})
 }
@@ -36,6 +81,7 @@ process.on('uncaughtException', (err) => {
 })
 
 function restartApp() {
+	unlockForQuit()
 	let done = false
 	const doRelaunch = () => {
 		if (done) return
@@ -133,6 +179,11 @@ function startLocalHttpServer() {
 				shell.openPath('C:\\Nepting\\nepting.bat');
 				res.write("Neptin start ok")
 				res.end()
+				if (kioskLock) {
+					setTimeout(bringAppToFront, 100)
+					setTimeout(bringAppToFront, 500)
+					setTimeout(bringAppToFront, 1500)
+				}
 				return
 			}
 			if (reqUrl == "/version") {
@@ -251,10 +302,29 @@ if(addresse == ''){
 	if(bounds.width == 768 && bounds.height == 1366){
 		zoom=0.75
 	}
+	mainWindow.on('close', (e) => {
+		if (kioskLock && !allowQuit) e.preventDefault()
+	})
+	mainWindow.on('blur', () => {
+		if (!kioskLock || allowQuit) return
+		clearTimeout(bringFrontTimer)
+		bringFrontTimer = setTimeout(bringAppToFront, 200)
+	})
+	mainWindow.on('leave-full-screen', () => {
+		if (kioskLock) mainWindow.setFullScreen(true)
+	})
+	mainWindow.on('minimize', () => {
+		if (kioskLock) {
+			mainWindow.restore()
+			bringAppToFront()
+		}
+	})
 	mainWindow.once("ready-to-show", () => {
 		autoUpdater.checkForUpdatesAndNotify();
 		mainWindow.webContents.setZoomFactor(zoom);
+		applyKioskLock()
 		mainWindow.show();
+		if (kioskLock) bringAppToFront()
 	});
   //mainWindow.maximize();
    
@@ -283,6 +353,12 @@ app.whenReady().then(() => {
 				buttons: ['OK']
 			})
 		  })
+		globalShortcut.register('shift+CommandOrControl+D', () => {
+			setKioskLock(false)
+		  })
+		globalShortcut.register('shift+CommandOrControl+A', () => {
+			setKioskLock(true)
+		  })
 		startLocalHttpServer()
 		createWindow()
 		
@@ -307,7 +383,11 @@ app.whenReady().then(() => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
-app.on('before-quit', function () {
+app.on('before-quit', function (e) {
+	if (kioskLock && !allowQuit) {
+		e.preventDefault()
+		return
+	}
 	if (localServer) {
 		localServer.close()
 		localServer = null
@@ -323,6 +403,7 @@ autoUpdater.on('update-available', () => {
 autoUpdater.on('update-downloaded', () => {
 	console.log("updateDowloaded")
   mainWindow.webContents.send('update_downloaded');
+  unlockForQuit();
   autoUpdater.quitAndInstall();
 });
 // In this file you can include the rest of your app's specific main process

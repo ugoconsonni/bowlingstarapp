@@ -87,6 +87,6 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             --title "v${VERSION}" \
-            --notes "Ctrl+Shift+V affiche la version installée." \
+            --notes "Mode kiosque: l'appli reste au premier plan. Ctrl+Shift+D désactive, Ctrl+Shift+A réactive." \
             --latest \
             "${ASSETS[@]}"
